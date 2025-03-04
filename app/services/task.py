@@ -137,7 +137,11 @@ def get_video_materials(task_id, params, video_terms, audio_duration):
             return None
         return [material_info.url for material_info in materials]
     else:
-        logger.info(f"\n\n## downloading videos from {params.video_source}")
+        source_type = "videos"
+        if params.video_source == "comfyui":
+            source_type = "images"
+            
+        logger.info(f"\n\n## {'generating' if params.video_source == 'comfyui' else 'downloading'} {source_type} from {params.video_source}")
         downloaded_videos = material.download_videos(
             task_id=task_id,
             search_terms=video_terms,
@@ -149,9 +153,14 @@ def get_video_materials(task_id, params, video_terms, audio_duration):
         )
         if not downloaded_videos:
             sm.state.update_task(task_id, state=const.TASK_STATE_FAILED)
-            logger.error(
-                "failed to download videos, maybe the network is not available. if you are in China, please use a VPN."
-            )
+            if params.video_source == "comfyui":
+                logger.error(
+                    "failed to generate images, please check ComfyUI API settings."
+                )
+            else:
+                logger.error(
+                    "failed to download videos, maybe the network is not available. if you are in China, please use a VPN."
+                )
             return None
         return downloaded_videos
 

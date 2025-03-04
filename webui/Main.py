@@ -430,6 +430,22 @@ if not config.app.get("hide_config", False):
                 tr("Pixabay API Key"), value=pixabay_api_key, type="password"
             )
             save_keys_to_config("pixabay_api_keys", pixabay_api_key)
+            
+            # ComfyUI API settings
+            st.write(tr("ComfyUI API Settings"))
+            comfyui_api_url = config.app.get("comfyui_api_url", "http://127.0.0.1:8188/api")
+            comfyui_api_url = st.text_input(
+                tr("ComfyUI API URL"), value=comfyui_api_url
+            )
+            config.app["comfyui_api_url"] = comfyui_api_url
+            
+            comfyui_json_template = config.app.get("comfyui_json_template", "")
+            comfyui_json_template = st.text_area(
+                tr("ComfyUI JSON Template (use {{text_positive}} as prompt placeholder)"), 
+                value=comfyui_json_template,
+                height=200
+            )
+            config.app["comfyui_json_template"] = comfyui_json_template
 
 panel = st.columns(3)
 left_panel = panel[0]
@@ -509,6 +525,7 @@ with middle_panel:
             (tr("Pexels"), "pexels"),
             (tr("Pixabay"), "pixabay"),
             (tr("Local file"), "local"),
+            (tr("ComfyUI"), "comfyui"),
             (tr("TikTok"), "douyin"),
             (tr("Bilibili"), "bilibili"),
             (tr("Xiaohongshu"), "xiaohongshu"),
@@ -781,7 +798,7 @@ if start_button:
         scroll_to_bottom()
         st.stop()
 
-    if params.video_source not in ["pexels", "pixabay", "local"]:
+    if params.video_source not in ["pexels", "pixabay", "local", "comfyui"]:
         st.error(tr("Please Select a Valid Video Source"))
         scroll_to_bottom()
         st.stop()
@@ -795,6 +812,16 @@ if start_button:
         st.error(tr("Please Enter the Pixabay API Key"))
         scroll_to_bottom()
         st.stop()
+        
+    if params.video_source == "comfyui":
+        comfyui_api_url = config.app.get("comfyui_api_url", "")
+        comfyui_json_template = config.app.get("comfyui_json_template", "")
+        if not comfyui_api_url or not comfyui_json_template:
+            st.error(tr("Please Enter the ComfyUI API URL and JSON Template"))
+            scroll_to_bottom()
+            st.stop()
+        params.comfyui_api_url = comfyui_api_url
+        params.comfyui_json_template = comfyui_json_template
 
     if uploaded_files:
         local_videos_dir = utils.storage_dir("local_videos", create=True)

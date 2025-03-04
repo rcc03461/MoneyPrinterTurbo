@@ -15,6 +15,13 @@
     # 特别注意格式，Key 用英文双引号括起来，多个Key用逗号隔开
     pixabay_api_keys = []
 
+    # ComfyUI API Settings
+    # Default API URL is http://127.0.0.1:8188/api
+    comfyui_api_url = ""
+    # JSON template with {{text_positive}} placeholder
+    # This will be used to generate images for video frames
+    comfyui_json_template = ""
+
     # 如果你没有 OPENAI API Key，可以使用 g4f 代替，或者使用国内的 Moonshot API
     # If you don't have an OPENAI API Key, you can use g4f instead
 

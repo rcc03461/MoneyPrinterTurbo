@@ -9,7 +9,9 @@ from moviepy.video.io.VideoFileClip import VideoFileClip
 
 from app.config import config
 from app.models.schema import MaterialInfo, VideoAspect, VideoConcatMode
-from app.utils import utils
+from app import utils
+from app.models import const
+from app.services import comfyui
 
 requested_count = 0
 
@@ -209,20 +211,73 @@ def download_videos(
     search_videos = search_videos_pexels
     if source == "pixabay":
         search_videos = search_videos_pixabay
-
-    for search_term in search_terms:
-        video_items = search_videos(
-            search_term=search_term,
-            minimum_duration=max_clip_duration,
-            video_aspect=video_aspect,
+    elif source == "comfyui":
+        # For ComfyUI, we generate images based on the search terms
+        comfyui_api_url = config.app.get("comfyui_api_url", "")
+        comfyui_json_template = config.app.get("comfyui_json_template", "")
+        
+        if not comfyui_api_url or not comfyui_json_template:
+            logger.error("ComfyUI API URL or JSON template not provided")
+            return []
+        
+        for search_term in search_terms:
+            # Generate images for each search term
+            video_items = comfyui.search_images_comfyui(
+                search_term=search_term,
+                task_id=task_id,
+                api_url=comfyui_api_url,
+                json_template=comfyui_json_template,
+            )
+            logger.info(f"Generated {len(video_items)} images for '{search_term}' using ComfyUI")
+            
+            for item in video_items:
+                if item.url not in valid_video_urls:
+                    valid_video_items.append(item)
+                    valid_video_urls.append(item.url)
+                    found_duration += item.duration
+        
+        # Process the results differently for ComfyUI generated images
+        logger.info(
+            f"Generated total images: {len(valid_video_items)}, required duration: {audio_duration} seconds, found duration: {found_duration} seconds"
         )
-        logger.info(f"found {len(video_items)} videos for '{search_term}'")
+        video_paths = []
+        
+        # For ComfyUI, we preprocess the images to create video clips
+        material_directory = config.app.get("material_directory", "").strip()
+        if material_directory == "task":
+            material_directory = utils.task_dir(task_id)
+        elif material_directory and not os.path.isdir(material_directory):
+            material_directory = ""
+            
+        # Preprocess images to create video clips
+        from app.services import video
+        processed_materials = video.preprocess_video(
+            materials=valid_video_items, 
+            clip_duration=max_clip_duration
+        )
+        
+        if processed_materials:
+            # Extract URLs from processed materials
+            for item in processed_materials:
+                if item.url:
+                    video_paths.append(item.url)
+                    
+        return video_paths
+    else:
+        # Original code for Pexels and Pixabay
+        for search_term in search_terms:
+            video_items = search_videos(
+                search_term=search_term,
+                minimum_duration=max_clip_duration,
+                video_aspect=video_aspect,
+            )
+            logger.info(f"found {len(video_items)} videos for '{search_term}'")
 
-        for item in video_items:
-            if item.url not in valid_video_urls:
-                valid_video_items.append(item)
-                valid_video_urls.append(item.url)
-                found_duration += item.duration
+            for item in video_items:
+                if item.url not in valid_video_urls:
+                    valid_video_items.append(item)
+                    valid_video_urls.append(item.url)
+                    found_duration += item.duration
 
     logger.info(
         f"found total videos: {len(valid_video_items)}, required duration: {audio_duration} seconds, found duration: {found_duration} seconds"

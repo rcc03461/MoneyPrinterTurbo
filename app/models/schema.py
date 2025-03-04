@@ -82,6 +82,10 @@ class VideoParams(BaseModel):
         None  # Materials used to generate the video
     )
 
+    # ComfyUI API parameters
+    comfyui_api_url: Optional[str] = ""  # ComfyUI API URL
+    comfyui_json_template: Optional[str] = ""  # ComfyUI JSON template with {{text_positive}} placeholder
+    
     video_language: Optional[str] = ""  # auto detect
 
     voice_name: Optional[str] = ""
