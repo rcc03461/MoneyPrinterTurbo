@@ -20,7 +20,7 @@
     comfyui_api_url = ""
     # JSON template with {{text_positive}} placeholder
     # This will be used to generate images for video frames
-    comfyui_json_template = ""
+    comfyui_json_template = "Comfyui json_template {{text_positive}}"
 
     # 如果你没有 OPENAI API Key，可以使用 g4f 代替，或者使用国内的 Moonshot API
     # If you don't have an OPENAI API Key, you can use g4f instead
