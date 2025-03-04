@@ -37,7 +37,7 @@ def generate_image_from_comfyui(prompt: str, api_url: str, json_template: str, o
             workflow = json.loads(workflow_json)
         except json.JSONDecodeError as e:
             logger.error(f"Invalid JSON template: {e}")
-            return ""
+            raise ValueError(f"Invalid JSON template: {e}")
         
         # Create a unique client ID
         client_id = str(uuid.uuid4())
@@ -50,15 +50,22 @@ def generate_image_from_comfyui(prompt: str, api_url: str, json_template: str, o
         p = {"prompt": workflow, "client_id": client_id}
         logger.info(f"Sending prompt to ComfyUI API: {api_url}")
         
-        response = requests.post(queue_url, json=p)
-        if response.status_code != 200:
-            logger.error(f"Failed to queue prompt: {response.text}")
-            return ""
+        try:
+            response = requests.post(queue_url, json=p, timeout=10)  # Add timeout to prevent hanging
+            if response.status_code != 200:
+                error_msg = f"Failed to queue prompt: {response.text}"
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+        except requests.exceptions.RequestException as e:
+            error_msg = f"Failed to connect to ComfyUI API: {str(e)}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
         
         prompt_id = response.json().get('prompt_id')
         if not prompt_id:
-            logger.error("No prompt_id returned")
-            return ""
+            error_msg = "No prompt_id returned from ComfyUI API"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
         
         logger.info(f"Prompt queued with ID: {prompt_id}")
         
@@ -69,8 +76,11 @@ def generate_image_from_comfyui(prompt: str, api_url: str, json_template: str, o
             time.sleep(1)
             
             # Check history for our prompt
-            history_response = requests.get(f"{history_url}/{prompt_id}")
-            if history_response.status_code != 200:
+            try:
+                history_response = requests.get(f"{history_url}/{prompt_id}", timeout=5)
+                if history_response.status_code != 200:
+                    continue
+            except requests.exceptions.RequestException:
                 continue
             
             history_data = history_response.json()
@@ -95,9 +105,13 @@ def generate_image_from_comfyui(prompt: str, api_url: str, json_template: str, o
                         img_url = f"{api_url.replace('/api', '')}/view?filename={filename}&type=output"
                         
                         # Download the image
-                        img_response = requests.get(img_url)
-                        if img_response.status_code != 200:
-                            logger.error(f"Failed to download image: {img_response.text}")
+                        try:
+                            img_response = requests.get(img_url, timeout=10)
+                            if img_response.status_code != 200:
+                                logger.error(f"Failed to download image: {img_response.text}")
+                                continue
+                        except requests.exceptions.RequestException as e:
+                            logger.error(f"Failed to download image: {str(e)}")
                             continue
                         
                         # Save the image
@@ -118,14 +132,17 @@ def generate_image_from_comfyui(prompt: str, api_url: str, json_template: str, o
                 break
         
         if not output_image_path:
-            logger.error("Timed out waiting for image generation")
-            return ""
+            error_msg = "Timed out waiting for image generation"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
             
         return output_image_path
         
     except Exception as e:
         logger.error(f"Error generating image with ComfyUI: {str(e)}")
-        return ""
+        if "ValueError" not in str(type(e)):
+            raise ValueError(f"Error generating image with ComfyUI: {str(e)}")
+        raise
 
 
 def search_images_comfyui(

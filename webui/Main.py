@@ -2,9 +2,12 @@ import os
 import platform
 import sys
 from uuid import uuid4
+import time
+import requests
 
 import streamlit as st
 from loguru import logger
+import gradio as gr
 
 # Add the root directory of the project to the system path to allow importing modules from the project
 root_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
@@ -432,20 +435,55 @@ if not config.app.get("hide_config", False):
             save_keys_to_config("pixabay_api_keys", pixabay_api_key)
             
             # ComfyUI API settings
-            st.write(tr("ComfyUI API Settings"))
+            st.write(tr("comfyui_api_settings"))
             comfyui_api_url = config.app.get("comfyui_api_url", "http://127.0.0.1:8188/api")
             comfyui_api_url = st.text_input(
-                tr("ComfyUI API URL"), value=comfyui_api_url
+                tr("comfyui_api_url"), value=comfyui_api_url
             )
             config.app["comfyui_api_url"] = comfyui_api_url
             
             comfyui_json_template = config.app.get("comfyui_json_template", "")
             comfyui_json_template = st.text_area(
-                tr("ComfyUI JSON Template (use {{text_positive}} as prompt placeholder)"), 
+                tr("comfyui_json_template"), 
                 value=comfyui_json_template,
                 height=200
             )
             config.app["comfyui_json_template"] = comfyui_json_template
+            
+            # Add a test button for ComfyUI API
+            if st.button(tr("comfyui_test_button")):
+                if not comfyui_api_url or not comfyui_json_template:
+                    st.error(tr("comfyui_test_missing_params"))
+                else:
+                    with st.spinner(tr("comfyui_test_in_progress")):
+                        try:
+                            # Save config so it can be accessed by the comfyui module
+                            config.save_config()
+                            
+                            # Create a temporary task ID for the test
+                            test_task_id = f"comfyui_test_{int(time.time())}"
+                            
+                            # Import and use the comfyui module to generate a test image
+                            from app.services.comfyui import generate_image_from_comfyui
+                            output_dir = utils.task_dir(sub_dir=test_task_id)
+                            
+                            test_prompt = tr("comfyui_test_prompt")
+                            test_image_path = generate_image_from_comfyui(
+                                prompt=test_prompt,
+                                api_url=comfyui_api_url,
+                                json_template=comfyui_json_template,
+                                output_dir=output_dir
+                            )
+                            
+                            if test_image_path and os.path.exists(test_image_path):
+                                # Display the generated image
+                                st.success(tr("comfyui_test_success"))
+                                st.image(test_image_path, caption=tr("comfyui_test_image"))
+                            else:
+                                st.error(tr("comfyui_test_failure"))
+                        except Exception as e:
+                            st.error(f"{tr('comfyui_test_error')}: {str(e)}")
+                            logger.error(f"ComfyUI test failed: {str(e)}")
 
 panel = st.columns(3)
 left_panel = panel[0]
@@ -875,3 +913,103 @@ if start_button:
     scroll_to_bottom()
 
 config.save_config()
+
+@app.post('/comfyui_test')
+def comfyui_test():
+    try:
+        # Get config
+        config = get_config()
+        
+        # Get ComfyUI settings
+        comfyui_api_url = request.form.get('comfyui_api_url')
+        comfyui_json_template = request.form.get('comfyui_json_template')
+        
+        # Validate input
+        if not comfyui_api_url:
+            return {'status': 'error', 'message': translate('comfyui_test_no_api_url')}
+        
+        if not comfyui_json_template:
+            return {'status': 'error', 'message': translate('comfyui_test_no_json_template')}
+        
+        # Create a temporary test directory
+        test_task_id = f"comfyui_test_{int(time.time())}"
+        output_dir = os.path.join(config.get("save_path", "./outputs"), test_task_id)
+        os.makedirs(output_dir, exist_ok=True)
+        
+        # Generate a test image
+        from app.services.comfyui import generate_image_from_comfyui
+        
+        test_prompt = translate('comfyui_test_prompt')
+        image_path = generate_image_from_comfyui(
+            prompt=test_prompt,
+            api_url=comfyui_api_url,
+            json_template=comfyui_json_template,
+            output_dir=output_dir
+        )
+        
+        # Return success response
+        return {
+            'status': 'success',
+            'message': translate('comfyui_test_success'),
+            'image': '/outputs/' + os.path.basename(output_dir) + '/' + os.path.basename(image_path)
+        }
+        
+    except ValueError as e:
+        return {'status': 'error', 'message': str(e)}
+    except Exception as e:
+        return {'status': 'error', 'message': translate('comfyui_test_error') + ': ' + str(e)}
+
+@app.get('/advanced_settings')
+def advanced_settings():
+    # ... existing code ...
+    # Add the ComfyUI settings part where appropriate
+    comfyui_api_url = config.get("comfyui_api_url", "")
+    comfyui_json_template = config.get("comfyui_json_template", "")
+    
+    # ... existing code ...
+    
+    # Add the Test ComfyUI Connection button in the UI
+    with gr.Row():
+        with gr.Column():
+            gr.Markdown(translate("comfyui_api_settings"))
+            with gr.Row():
+                comfyui_api_url_input = gr.Textbox(label=translate("comfyui_api_url"), value=comfyui_api_url)
+                comfyui_json_template_input = gr.Textbox(label=translate("comfyui_json_template"), lines=5, value=comfyui_json_template)
+            
+            with gr.Row():
+                comfyui_test_button = gr.Button(translate("comfyui_test_button"))
+                comfyui_test_status = gr.Markdown("")
+                comfyui_test_image = gr.Image(label=translate("comfyui_test_image"), visible=False)
+            
+            # Handle the test button click
+            def test_comfyui_connection(api_url, json_template):
+                if not api_url or not json_template:
+                    return {"visible": False}, {"visible": False}, translate("comfyui_test_missing_params")
+                
+                # Save the config first
+                save_config_values({"comfyui_api_url": api_url, "comfyui_json_template": json_template})
+                
+                # Test the connection
+                try:
+                    response = requests.post(
+                        f"{request.url_root}comfyui_test",
+                        data={"comfyui_api_url": api_url, "comfyui_json_template": json_template}
+                    )
+                    result = response.json()
+                    
+                    if result.get('status') == 'success':
+                        image_url = request.url_root.rstrip('/') + result.get('image', '')
+                        return {"src": image_url, "visible": True}, {"visible": True}, result.get('message')
+                    else:
+                        return {"visible": False}, {"visible": False}, result.get('message')
+                        
+                except Exception as e:
+                    return {"visible": False}, {"visible": False}, translate("comfyui_test_connection_error") + ": " + str(e)
+            
+            comfyui_test_button.click(
+                test_comfyui_connection,
+                inputs=[comfyui_api_url_input, comfyui_json_template_input],
+                outputs=[comfyui_test_image, comfyui_test_status]
+            )
+    
+    # ... existing code ...
