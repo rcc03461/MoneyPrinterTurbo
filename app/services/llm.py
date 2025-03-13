@@ -260,7 +260,7 @@ def _generate_response(prompt: str) -> str:
 
 
 def generate_script(
-    video_subject: str, language: str = "", paragraph_number: int = 1
+    video_subject: str, language: str = "", paragraph_number: int = 3
 ) -> str:
     prompt = f"""
 # Role: Video Script Generator
@@ -333,22 +333,38 @@ Generate a script for a video, depending on the subject of the video.
     return final_script.strip()
 
 
-def generate_terms(video_subject: str, video_script: str, amount: int = 5) -> List[str]:
+def generate_comfyui_prompt(video_subject: str, video_script: str) -> str:
+    """
+    Generate a high-quality CLIP prompt for ComfyUI image generation
+    
+    Args:
+        video_subject: The subject of the video
+        video_script: The video script
+        
+    Returns:
+        A detailed prompt for image generation
+    """
     prompt = f"""
-# Role: Video Search Terms Generator
+# Role: AI Image Prompt Engineering Expert
 
 ## Goals:
-Generate {amount} search terms for stock videos, depending on the subject of a video.
+Generate high-quality, detailed text prompts for AI image generation based on the video subject and script.
 
-## Constrains:
-1. the search terms are to be returned as a json-array of strings.
-2. each search term should consist of 1-3 words, always add the main subject of the video.
-3. you must only return the json-array of strings. you must not return anything else. you must not return the script.
-4. the search terms must be related to the subject of the video.
-5. reply with english search terms only.
+## Instructions:
+1. Create detailed, descriptive prompts that will work well with text-to-image models (CLIP/Stable Diffusion).
+2. Include specific visual details like lighting, style, mood, composition, camera angle, and scene elements.
+3. Focus on creating a cinematic, professional quality description.
+4. Return ONLY the prompt text without any explanation, JSON formatting, or quotes.
+5. Keep the prompt under 75 words but make it highly descriptive.
+6. Do not include any negative prompts - focus only on what SHOULD appear in the image.
 
-## Output Example:
-["search term 1", "search term 2", "search term 3","search term 4","search term 5"]
+## Best Practices for AI Image Prompts:
+- Use descriptive adjectives for visual qualities (vibrant, detailed, dramatic, photorealistic)
+- Specify art styles if appropriate (cinematic, professional photography, 8K)
+- Include lighting details (golden hour, dramatic lighting, soft ambient light)
+- Mention composition elements (close-up, wide shot, overhead view)
+- Describe the setting and important objects in the scene
+- Avoid vague descriptions or non-visual concepts
 
 ## Context:
 ### Video Subject
@@ -357,7 +373,89 @@ Generate {amount} search terms for stock videos, depending on the subject of a v
 ### Video Script
 {video_script}
 
-Please note that you must use English for generating video search terms; Chinese is not accepted.
+## Example Output Format:
+photorealistic image of a majestic mountain landscape at sunrise, golden light illuminating snow-capped peaks, dramatic clouds, crystal clear lake reflection, vibrant colors, ultra detailed, professional photography, 8K, hyperrealistic
+"""
+    
+    logger.info(f"Generating ComfyUI prompt for subject: {video_subject}")
+    
+    clip_prompt = ""
+    for i in range(_max_retries):
+        try:
+            clip_prompt = _generate_response(prompt)
+            if clip_prompt and len(clip_prompt) > 10:
+                break
+        except Exception as e:
+            logger.warning(f"Failed to generate ComfyUI prompt: {str(e)}")
+        
+        if i < _max_retries - 1:
+            logger.warning(f"Failed to generate ComfyUI prompt, trying again... {i + 1}")
+    
+    if not clip_prompt:
+        # Fallback to a simple prompt based on the subject
+        clip_prompt = f"photorealistic detailed image of {video_subject}, cinematic, high quality, 8K"
+    
+    logger.success(f"Generated ComfyUI prompt: {clip_prompt}")
+    return clip_prompt.strip()
+
+
+def generate_terms(video_subject: str, video_script: str, amount: int = 5) -> List[str]:
+#     prompt = f"""
+# # Role: Video Search Terms Generator
+
+# ## Goals:
+# Generate {amount} search terms for stock videos, depending on the subject of a video.
+
+# ## Constrains:
+# 1. the search terms are to be returned as a json-array of strings.
+# 2. each search term should consist of 1-3 words, always add the main subject of the video.
+# 3. you must only return the json-array of strings. you must not return anything else. you must not return the script.
+# 4. the search terms must be related to the subject of the video.
+# 5. reply with english search terms only.
+
+# ## Output Example:
+# ["search term 1", "search term 2", "search term 3","search term 4","search term 5"]
+
+# ## Context:
+# ### Video Subject
+# {video_subject}
+
+# ### Video Script
+# {video_script}
+
+# Please note that you must use English for generating video search terms; Chinese is not accepted.
+# """.strip()
+    prompt = f"""
+# Role: AI Image Prompt Engineering Expert
+
+## Goals:
+Split video script as scenes and Generate high-quality, detailed text prompts for AI image generation.
+
+## Instructions:
+1. Create detailed, descriptive prompts that will work well with text-to-image models (CLIP/Stable Diffusion).
+2. Include specific visual details like lighting, style, mood, composition, camera angle, and scene elements.
+3. Focus on creating a cinematic, professional quality description.
+4. Return ONLY the prompt text without any explanation, JSON formatting, or quotes.
+5. Keep the prompt under 75 words for every scene but make it highly descriptive.
+6. Do not include any negative prompts - focus only on what SHOULD appear in the image.
+
+## Best Practices for AI Image Prompts:
+- Use descriptive adjectives for visual qualities (vibrant, detailed, dramatic, photorealistic)
+- Specify art styles if appropriate (cinematic, professional photography, 8K)
+- Include lighting details (golden hour, dramatic lighting, soft ambient light)
+- Mention composition elements (close-up, wide shot, overhead view)
+- Describe the setting and important objects in the scene
+- Avoid vague descriptions or non-visual concepts
+
+## Context:
+### Video Script
+{video_script}
+
+## Example Scene Prompt:
+photorealistic image of a majestic mountain landscape at sunrise, golden light illuminating snow-capped peaks, dramatic clouds, crystal clear lake reflection, vibrant colors, ultra detailed, professional photography, 8K, hyperrealistic
+
+## Example Output Format:
+["Scene Prompt 1", "Scene Prompt 2", "Scene Prompt 3", "Scene Prompt 4", "Scene Prompt 5"]
 """.strip()
 
     logger.info(f"subject: {video_subject}")

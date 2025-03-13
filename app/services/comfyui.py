@@ -265,7 +265,15 @@ def search_images_comfyui(
     output_dir = utils.task_dir(sub_dir=task_id)
     
     try:
-        # Generate one image per search term
+        # Use llm.generate_comfyui_prompt to create a better prompt
+        from app.services import llm
+        # enhanced_prompt = llm.generate_comfyui_prompt(
+        #     video_subject=search_term,
+        #     video_script=search_term  # We don't have a script here, so just use the search term again
+        # )
+        logger.info(f"Enhanced ComfyUI prompt: {search_term}")
+        
+        # Generate image with the enhanced prompt
         image_path = generate_image_from_comfyui(
             prompt=search_term,
             api_url=api_url,
